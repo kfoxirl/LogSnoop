@@ -1,0 +1,9 @@
+Mock FTP packet data for testing - not a real PCAP file
+This file simulates FTP traffic analysis results.
+
+Sample FTP session data:
+- Client: 192.168.1.100
+- Server: 192.168.1.200
+- Upload: upload_file.txt (5,120 bytes)
+- Download: download_file.pdf (102,400 bytes)
+- Commands: USER, PASS, STOR, RETR, LIST
