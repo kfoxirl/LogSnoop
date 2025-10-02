@@ -79,6 +79,13 @@ sample_logs/
 test_logs/
 demo_table_view.py
 
+# Installation artifacts
+build/
+dist/
+*.tar.gz
+*.deb
+*.rpm
+
 # Temporary files
 *.tmp
 *.temp

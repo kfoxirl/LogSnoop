@@ -46,13 +46,57 @@ LogSnoop is a flexible log parser that can analyze different types of logs throu
 
 ## Installation
 
+### Quick Installation (Linux/macOS)
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/kfoxirl/LogSnoop.git
 cd LogSnoop
 
-# Install in development mode
-pip install -e .
+# Install for current user (recommended)
+make install-user
+
+# OR install system-wide (requires sudo)
+sudo make install-system
+```
+
+### Windows Installation
+```batch
+# Clone the repository
+git clone https://github.com/kfoxirl/LogSnoop.git
+cd LogSnoop
+
+# Run the Windows installer
+install.bat
+```
+
+### Manual Installation
+```bash
+# Clone and setup virtual environment
+git clone https://github.com/kfoxirl/LogSnoop.git
+cd LogSnoop
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# Use directly
+python cli.py --help
+```
+
+### Installation Options
+- **User Installation**: `make install-user` - Installs to `~/.local/` (no sudo required)
+- **System Installation**: `sudo make install-system` - Installs to `/usr/local/` (available for all users)
+- **Custom Location**: `make install PREFIX=/opt/logsnoop` - Install to custom directory
+- **Windows**: `install.bat` - Automated Windows installation with PATH setup
+
+### Post-Installation
+After installation, LogSnoop is available as a system command:
+```bash
+# View manual page
+man logsnoop
+
+# Run LogSnoop
+logsnoop --help
+logsnoop list-plugins
 ```
 
 ## Usage

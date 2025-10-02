@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""
+LogSnoop Binary Wrapper
+A standalone executable wrapper for the LogSnoop log parser CLI.
+"""
+
+import sys
+import os
+import subprocess
+from pathlib import Path
+
+def find_logsnoop_installation():
+    """Find the LogSnoop installation directory."""
+    # Try to find logsnoop relative to this script
+    script_dir = Path(__file__).parent.absolute()
+    
+    # Check if we're in the source directory
+    cli_path = script_dir / "cli.py"
+    if cli_path.exists():
+        return script_dir, cli_path
+    
+    # Check if we're in a bin directory with source nearby
+    parent_cli = script_dir.parent / "cli.py"
+    if parent_cli.exists():
+        return script_dir.parent, parent_cli
+    
+    # Check common installation paths
+    common_paths = [
+        Path("/usr/local/share/logsnoop"),
+        Path("/opt/logsnoop"),
+        Path.home() / ".local/share/logsnoop",
+        script_dir.parent / "share" / "logsnoop",
+    ]
+    
+    for path in common_paths:
+        cli_path = path / "cli.py"
+        if cli_path.exists():
+            return path, cli_path
+    
+    return None, None
+
+def find_python_executable(install_dir):
+    """Find the appropriate Python executable."""
+    # Check for virtual environment
+    venv_paths = [
+        install_dir / ".venv" / "bin" / "python",
+        install_dir / ".venv" / "Scripts" / "python.exe",
+        install_dir / "venv" / "bin" / "python",
+        install_dir / "venv" / "Scripts" / "python.exe",
+    ]
+    
+    for venv_python in venv_paths:
+        if venv_python.exists():
+            return venv_python
+    
+    # Fall back to system Python (try multiple variants)
+    python_candidates = ["python3", "python", sys.executable]
+    for candidate in python_candidates:
+        if candidate and Path(candidate).exists():
+            return candidate
+    return "python3"  # Final fallback
+
+def main():
+    """Main wrapper function."""
+    # Find LogSnoop installation
+    install_dir, cli_path = find_logsnoop_installation()
+    
+    if not install_dir or not cli_path:
+        print("Error: Could not find LogSnoop installation.", file=sys.stderr)
+        print("Make sure LogSnoop is properly installed or run from the source directory.", file=sys.stderr)
+        sys.exit(1)
+    
+    # Find Python executable
+    python_exe = find_python_executable(install_dir)
+    
+    # Prepare command
+    cmd = [str(python_exe), str(cli_path)] + sys.argv[1:]
+    
+    # Change to installation directory for relative imports
+    original_cwd = os.getcwd()
+    os.chdir(install_dir)
+    
+    try:
+        # Execute the CLI script
+        result = subprocess.run(cmd, cwd=install_dir)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        print(f"Error: Could not execute Python interpreter: {python_exe}", file=sys.stderr)
+        print("Make sure Python is installed and accessible.", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        sys.exit(130)  # Standard exit code for SIGINT
+    except Exception as e:
+        print(f"Error executing LogSnoop: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        os.chdir(original_cwd)
+
+if __name__ == "__main__":
+    main()

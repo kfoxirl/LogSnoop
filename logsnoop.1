@@ -1,0 +1,189 @@
+.TH LOGSNOOP 1 "October 2025" "LogSnoop 1.0" "User Commands"
+.SH NAME
+logsnoop \- log parser with plugin architecture for analyzing various log formats
+.SH SYNOPSIS
+.B logsnoop
+.RI [ COMMAND ]
+.RI [ OPTIONS ]
+.RI [ ARGUMENTS ]
+.SH DESCRIPTION
+.B LogSnoop
+is a flexible log parser that can analyze different types of logs through a plugin-based architecture. It supports SSH authentication logs, FTP server logs, HTTP access logs, simple login logs, and SKY binary network traffic logs, storing results in a flat file database for easy querying.
+
+The tool provides an interactive table view with pagination, comprehensive querying capabilities, and rich formatting options for log analysis and investigation.
+.SH COMMANDS
+.TP
+.B list-plugins
+List all available log parsing plugins
+.TP
+.BI "parse " "FILE PLUGIN"
+Parse a log file using the specified plugin
+.TP
+.BI "query " "PLUGIN QUERY_TYPE"
+Query parsed logs using plugin-specific queries
+.TP
+.B list-files
+List all previously parsed log files
+.TP
+.BI "summary " "FILE_ID"
+Show summary statistics for a specific parsed file
+.TP
+.BI "view " "PLUGIN"
+View log entries in interactive paginated table format
+.SH OPTIONS
+.SS General Options
+.TP
+.BI "\-h, \-\-help"
+Show help message and exit
+.TP
+.BI "\-\-db " "DATABASE"
+Specify database file path (default: logsnoop.db)
+.SS Parse Options
+.TP
+.BI "\-\-plugin " "PLUGIN_NAME"
+Specify which plugin to use for parsing
+.SS Query Options
+.TP
+.BI "\-\-limit " "NUMBER"
+Limit the number of results returned
+.TP
+.BI "\-\-ip " "IP_ADDRESS"
+Filter results by IP address
+.TP
+.BI "\-\-user " "USERNAME"
+Filter results by username
+.TP
+.BI "\-\-status " "STATUS"
+Filter results by status code
+.TP
+.BI "\-\-file\-id " "FILE_ID"
+Query specific file by ID instead of all files
+.TP
+.BI "\-\-by\-ip"
+Group results by IP address
+.TP
+.BI "\-\-by\-user"
+Group results by username
+.TP
+.BI "\-\-by\-path"
+Group results by file path
+.TP
+.BI "\-\-by\-type"
+Group results by event type
+.TP
+.BI "\-\-by\-status"
+Group results by status code
+.TP
+.BI "\-\-period " "{hour,day,month}"
+Time period for grouping results
+.TP
+.BI "\-\-by\-bytes"
+Sort by bytes transferred instead of count
+.TP
+.BI "\-\-sort\-by " "{connections,bytes}"
+Sort criteria for results
+.SS View Options
+.TP
+.BI "\-\-page\-size " "NUMBER"
+Number of entries per page in table view (default: 20)
+.TP
+.BI "\-\-no\-clear"
+Don't clear screen between pages in table view
+.SH SUPPORTED PLUGINS
+.TP
+.B ssh_auth
+Parse SSH authentication logs (auth.log, secure). Tracks failed/successful logins, connections, and suspicious patterns.
+.br
+Queries: failed_logins, successful_logins, connection_count, suspicious_logins, top_attackers, login_attempts_by_user, connections_by_ip
+.TP
+.B ftp_log
+Parse FTP server logs (vsftpd, proftpd). Tracks uploads, downloads, file operations, and bytes transferred.
+.br
+Queries: uploads, downloads, login_attempts, failed_logins, successful_logins, bytes_transferred, top_uploaders, top_downloaders, file_operations, connections_by_ip
+.TP
+.B http_access
+Parse HTTP web server access logs (Apache, Nginx). Tracks requests, status codes, bandwidth usage, and response times.
+.br
+Queries: requests_by_status, requests_by_ip, requests_by_path, error_requests, bytes_served, top_pages, top_referrers, top_user_agents, bandwidth_usage, response_time_stats
+.TP
+.B simple_login
+Parse simple login logs with timestamp, IP, username format. Tracks user login patterns and frequency.
+.br
+Queries: logins_by_user, logins_by_ip, login_count, unique_users, unique_ips, login_timeline, frequent_users, frequent_ips
+.TP
+.B sky_log
+Parse SKY binary network traffic logs (custom binary format). Tracks network connections, data transfers, and bandwidth usage.
+.br
+Queries: traffic_by_ip, top_talkers, top_data_senders, busiest_day, traffic_summary, bytes_by_source, bytes_by_destination, connections_by_source, connections_by_destination, traffic_timeline, ip_pairs, bandwidth_usage
+.SH TABLE VIEW NAVIGATION
+When using the
+.B view
+command, the following navigation commands are available:
+.TP
+.B n, next
+Go to next page
+.TP
+.B p, prev
+Go to previous page
+.TP
+.BI "g" "NUMBER"
+Go to specific page (e.g., g5 or g 5)
+.TP
+.B q, quit
+Exit table view
+.TP
+.B h, help
+Show navigation help
+.SH EXAMPLES
+.TP
+List available plugins:
+.B logsnoop list-plugins
+.TP
+Parse an SSH authentication log:
+.B logsnoop parse /var/log/auth.log ssh_auth
+.TP
+Parse a SKY binary log file:
+.B logsnoop parse network_traffic.sky sky_log
+.TP
+Query failed SSH login attempts:
+.B logsnoop query ssh_auth failed_logins
+.TP
+Query top attackers (limited to 5 results):
+.B logsnoop query ssh_auth top_attackers --limit 5
+.TP
+Query network traffic for a specific file:
+.B logsnoop query sky_log traffic_summary --file-id 1
+.TP
+View log entries in interactive table format:
+.B logsnoop view sky_log --file-id 1 --page-size 10
+.TP
+View entries filtered by IP address:
+.B logsnoop view sky_log --ip 192.168 --page-size 5
+.TP
+Show summary for parsed file ID 1:
+.B logsnoop summary 1
+.TP
+List all parsed files:
+.B logsnoop list-files
+.SH FILES
+.TP
+.B logsnoop.db
+Default database file for storing parsed log data and metadata
+.TP
+.B ~/.config/logsnoop/
+Configuration directory (future use)
+.SH EXIT STATUS
+.B logsnoop
+returns 0 on success, and non-zero on error.
+.SH AUTHOR
+LogSnoop was created as a flexible log analysis tool with plugin architecture.
+.SH REPORTING BUGS
+Report bugs to the project repository or maintainer.
+.SH COPYRIGHT
+This is free software; see the source for copying conditions.
+.SH SEE ALSO
+.BR grep (1),
+.BR awk (1),
+.BR tail (1),
+.BR less (1),
+.BR journalctl (1)
