@@ -8,6 +8,7 @@ import sys
 import os
 from pathlib import Path
 from logsnoop.core import LogParser
+from logsnoop.interactive import run_interactive_mode
 
 
 def format_bytes(bytes_value):
@@ -294,6 +295,10 @@ def main():
     parser = argparse.ArgumentParser(description='LogSnoop - Log Parser with Plugin Architecture')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
+    # Interactive mode command
+    interactive_parser = subparsers.add_parser('interactive', help='Start interactive mode with guided workflows')
+    interactive_parser.add_argument('--db', default='logsnoop.db', help='Database file path')
+    
     # List plugins command
     list_parser = subparsers.add_parser('list-plugins', help='List available plugins')
     list_parser.add_argument('--db', default='logsnoop.db', help='Database file path')
@@ -349,6 +354,11 @@ def main():
         return
     
     try:
+        if args.command == 'interactive':
+            # Run interactive mode
+            run_interactive_mode(args.db)
+            return
+            
         log_parser = LogParser(args.db)
         
         if args.command == 'list-plugins':

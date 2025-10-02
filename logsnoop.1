@@ -13,6 +13,9 @@ is a flexible log parser that can analyze different types of logs through a plug
 The tool provides an interactive table view with pagination, comprehensive querying capabilities, and rich formatting options for log analysis and investigation.
 .SH COMMANDS
 .TP
+.B interactive
+Start interactive mode with guided workflows for beginners. Provides step-by-step assistance for parsing files, running queries, and viewing results.
+.TP
 .B list-plugins
 List all available log parsing plugins
 .TP
@@ -115,6 +118,16 @@ Queries: logins_by_user, logins_by_ip, login_count, unique_users, unique_ips, lo
 Parse SKY binary network traffic logs (custom binary format). Tracks network connections, data transfers, and bandwidth usage.
 .br
 Queries: traffic_by_ip, top_talkers, top_data_senders, busiest_day, traffic_summary, bytes_by_source, bytes_by_destination, connections_by_source, connections_by_destination, traffic_timeline, ip_pairs, bandwidth_usage
+.TP
+.B tomcat_log
+Parse Apache Tomcat server logs (access.log, catalina.out). Supports both access logs and catalina application logs. Tracks HTTP requests, response times, errors, and exceptions.
+.br
+Queries: requests_by_status, requests_by_ip, requests_by_path, error_requests, slow_requests, bytes_served, top_pages, top_user_agents, bandwidth_usage, response_time_stats, requests_by_method, session_analysis, exception_summary, daily_traffic, catalina_errors, application_errors
+.TP
+.B iis_log
+Parse Microsoft IIS server logs (W3C Extended format). Tracks HTTP requests, response codes, bandwidth, and response times. Supports IIS-specific features like Win32 status codes and ASP.NET errors.
+.br
+Queries: requests_by_status, requests_by_ip, requests_by_path, error_requests, slow_requests, bytes_served, top_pages, top_user_agents, bandwidth_usage, response_time_stats, requests_by_method, requests_by_site, win32_status_analysis, daily_traffic, client_errors, server_errors, asp_net_errors, top_referrers, query_string_analysis, protocol_analysis
 .SH TABLE VIEW NAVIGATION
 When using the
 .B view

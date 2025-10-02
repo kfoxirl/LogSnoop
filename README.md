@@ -5,7 +5,7 @@ LogSnoop is a flexible log parser that can analyze different types of logs throu
 ## Features
 
 - **Plugin Architecture**: Easily extensible with custom log parsers
-- **Multiple Log Types**: Built-in support for SSH, FTP, HTTP, and login logs
+- **Multiple Log Types**: Built-in support for SSH, FTP, HTTP, login, Tomcat, and IIS logs
 - **Flat File Database**: Simple JSON-based storage with no external dependencies
 - **Rich Querying**: Comprehensive query system for each log type
 - **Interactive Table View**: Paginated table display with `less`-like navigation
@@ -43,6 +43,20 @@ LogSnoop is a flexible log parser that can analyze different types of logs throu
 - Tracks network connections, data transfers, bandwidth usage
 - Supports header metadata (hostname, flags, creation timestamp)
 - **Queries**: `traffic_by_ip`, `top_talkers`, `traffic_summary`, `bytes_by_source`, `bytes_by_destination`, `connections_by_source`, `connections_by_destination`, `traffic_timeline`, `ip_pairs`, `bandwidth_usage`
+
+### 6. Apache Tomcat Logs (`tomcat_log`)
+- Parses Apache Tomcat server logs (access.log, catalina.out)
+- Supports both access logs and catalina application logs
+- Tracks HTTP requests, response times, errors, and exceptions
+- Analyzes application errors, session data, and performance metrics
+- **Queries**: `requests_by_status`, `requests_by_ip`, `requests_by_path`, `error_requests`, `slow_requests`, `bytes_served`, `top_pages`, `top_user_agents`, `bandwidth_usage`, `response_time_stats`, `requests_by_method`, `session_analysis`, `exception_summary`, `daily_traffic`, `catalina_errors`, `application_errors`
+
+### 7. Microsoft IIS Logs (`iis_log`)
+- Parses Microsoft IIS server logs (W3C Extended format)
+- Tracks HTTP requests, response codes, bandwidth, and response times
+- Supports IIS-specific features like Win32 status codes and ASP.NET errors
+- Analyzes multiple sites, client errors, server errors, and protocols
+- **Queries**: `requests_by_status`, `requests_by_ip`, `requests_by_path`, `error_requests`, `slow_requests`, `bytes_served`, `top_pages`, `top_user_agents`, `bandwidth_usage`, `response_time_stats`, `requests_by_method`, `requests_by_site`, `win32_status_analysis`, `daily_traffic`, `client_errors`, `server_errors`, `asp_net_errors`, `top_referrers`, `query_string_analysis`, `protocol_analysis`
 
 ## Installation
 
@@ -101,7 +115,26 @@ logsnoop list-plugins
 
 ## Usage
 
-### Command Line Interface
+LogSnoop offers both a **command-line interface** for advanced users and an **interactive mode** for beginners.
+
+### 🎯 Interactive Mode (Recommended for New Users)
+
+Start the user-friendly interactive mode with guided workflows:
+
+```bash
+logsnoop interactive
+```
+
+The interactive mode provides:
+- 🎯 **Guided file parsing** with plugin selection assistance
+- 🔍 **Query builder** with descriptions and examples  
+- 📊 **Visual results** with formatted output and colors
+- 📋 **Table browser** integration
+- 🔌 **Plugin information** with supported queries
+- ✅ **Input validation** and helpful error messages
+- 🚀 **No command memorization needed!**
+
+### Command Line Interface (Advanced Users)
 
 #### List Available Plugins
 ```bash
@@ -121,6 +154,15 @@ logsnoop parse /var/log/apache2/access.log http_access
 
 # Parse SKY binary log
 logsnoop parse network_traffic.sky sky_log
+
+# Parse Tomcat access log
+logsnoop parse /opt/tomcat/logs/localhost_access_log.txt tomcat_log
+
+# Parse Tomcat catalina log
+logsnoop parse /opt/tomcat/logs/catalina.out tomcat_log
+
+# Parse IIS log
+logsnoop parse /inetpub/logs/LogFiles/W3SVC1/ex231002.log iis_log
 ```
 
 #### Query Parsed Logs
@@ -151,6 +193,24 @@ logsnoop query sky_log top_talkers --limit 10 --by-bytes
 
 # Get most active IP pairs
 logsnoop query sky_log ip_pairs --limit 10 --sort-by bytes
+
+# Query Tomcat error requests
+logsnoop query tomcat_log error_requests --limit 20
+
+# Query Tomcat response time statistics
+logsnoop query tomcat_log response_time_stats
+
+# Query Tomcat exception summary
+logsnoop query tomcat_log exception_summary --limit 10
+
+# Query IIS requests by site
+logsnoop query iis_log requests_by_site
+
+# Query IIS Win32 status analysis
+logsnoop query iis_log win32_status_analysis --limit 15
+
+# Query IIS ASP.NET errors
+logsnoop query iis_log asp_net_errors
 ```
 
 #### List Parsed Files
