@@ -23,6 +23,16 @@ except ImportError:
         pass
     class IP:
         pass
+    class TCP:
+        pass
+    class UDP:
+        pass
+    class ICMP:
+        pass
+    class DNS:
+        pass
+    class Raw:
+        pass
 
 
 class PcapNetworkPlugin(BaseLogPlugin):
@@ -221,7 +231,7 @@ class PcapNetworkPlugin(BaseLogPlugin):
             dest_port = tcp_layer.dport
             source_port = tcp_layer.sport
             
-            # Check if this is FTP traffic (port 21 = control, high ports = data)
+            # Check if this is FTP traffic (port 21 = control, port 20 or high ports = data)
             if dest_port == 21 or source_port == 21:
                 # FTP Control Channel
                 if packet.haslayer(Raw):
@@ -231,15 +241,20 @@ class PcapNetworkPlugin(BaseLogPlugin):
                     except:
                         pass
                         
-            elif packet.haslayer(Raw) and len(packet[Raw].load) > 0:
-                # Potential FTP Data Channel (high port with data)
-                if (dest_port > 1024 or source_port > 1024) and entry["payload_size"] > 100:
+            elif packet.haslayer(Raw) and len(packet[Raw].load) > 50:
+                # FTP Data Channel - port 20 (standard FTP data port)
+                if dest_port == 20 or source_port == 20:
                     entry["event_type"] = "ftp_data_transfer"
-                    entry["ftp_data_port"] = dest_port if dest_port > 1024 else source_port
+                    entry["ftp_data_port"] = 20
+                    # Set bytes_transferred to payload size for data packets
+                    entry["bytes_transferred"] = entry["payload_size"]
         
         # Calculate payload size
         if packet.haslayer(Raw):
             entry["payload_size"] = len(packet[Raw].load)
+            # For FTP data transfers, set bytes_transferred to payload size
+            if entry["event_type"] == "ftp_data_transfer":
+                entry["bytes_transferred"] = entry["payload_size"]
         
         return entry
     
@@ -702,26 +717,54 @@ class PcapNetworkPlugin(BaseLogPlugin):
         uploads = []
         downloads = []
         
-        # Process transfer commands and try to match with data/completion
+        # Process transfer commands and correlate with actual data transfers
         for cmd in transfer_commands:
-            transfer_info = {
-                "filename": cmd.get("ftp_filename", "unknown"),
-                "timestamp": cmd.get("timestamp", ""),
-                "source_ip": cmd.get("source_ip", ""),
-                "destination_ip": cmd.get("destination_ip", ""),
-                "transfer_type": cmd.get("ftp_transfer_type", ""),
-                "bytes_transferred": 0
-            }
-            
-            # Try to find corresponding completion message with byte count
             cmd_time = cmd.get("timestamp", "")
+            filename = cmd.get("ftp_filename", "unknown")
+            transfer_type = cmd.get("ftp_transfer_type", "")
+            
+            # Find the next completion message after this command to define the window
+            next_completion_time = None
             for completion in completions:
-                if (completion.get("source_ip") == cmd.get("destination_ip") and 
-                    completion.get("timestamp", "") > cmd_time):
-                    transfer_info["bytes_transferred"] = completion.get("bytes_transferred", 0)
+                comp_time = completion.get("timestamp", "")
+                if comp_time > cmd_time:
+                    next_completion_time = comp_time
                     break
             
-            if transfer_info["transfer_type"] == "upload":
+            # Sum up data transfer bytes between command and completion
+            total_bytes = 0
+            data_packet_count = 0
+            
+            for data in data_transfers:
+                data_time = data.get("timestamp", "")
+                # Data transfers should happen after the command and before completion
+                if data_time >= cmd_time and (next_completion_time is None or data_time <= next_completion_time):
+                    data_src_port = data.get("source_port", 0)
+                    data_dst_port = data.get("destination_port", 0)
+                    
+                    # Check if this data transfer matches the direction
+                    if transfer_type == "upload":
+                        # Upload: client to server (high port to port 20)
+                        if data_dst_port == 20 and data_src_port > 1024:
+                            total_bytes += data.get("bytes_transferred", 0)
+                            data_packet_count += 1
+                    else:
+                        # Download: server to client (port 20 to high port)  
+                        if data_src_port == 20 and data_dst_port > 1024:
+                            total_bytes += data.get("bytes_transferred", 0)
+                            data_packet_count += 1
+            
+            transfer_info = {
+                "filename": filename,
+                "timestamp": cmd_time,
+                "source_ip": cmd.get("source_ip", ""),
+                "destination_ip": cmd.get("destination_ip", ""),
+                "transfer_type": transfer_type,
+                "bytes_transferred": total_bytes,
+                "data_packets": data_packet_count
+            }
+            
+            if transfer_type == "upload":
                 uploads.append(transfer_info)
             else:
                 downloads.append(transfer_info)
@@ -739,39 +782,46 @@ class PcapNetworkPlugin(BaseLogPlugin):
             "total_download_bytes": download_bytes,
             "total_transfer_bytes": upload_bytes + download_bytes,
             "data_packets": len(data_transfers),
-            "completion_messages": len(completions)
+            "completion_messages": len(completions),
+            "debug_info": f"Found {len(transfer_commands)} transfer commands, {len(data_transfers)} data packets"
         }
     
     def _query_ftp_file_sizes(self, entries: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:
-        """Analyze FTP file sizes from SIZE commands and transfer completions."""
-        # Get SIZE command responses (213 response code)
-        size_responses = [e for e in entries if e.get("event_type") == "ftp_size_response"]
+        """Analyze FTP file sizes from actual data transfers."""
+        # Get actual file transfer results
+        ftp_transfers = self._query_ftp_transfers(entries, **kwargs)
         
-        # Get transfer completion messages with byte counts
-        completions = [e for e in entries if (e.get("event_type") == "ftp_transfer_complete" and 
-                                             e.get("bytes_transferred", 0) > 0)]
-        
-        file_sizes = {}
+        # Extract file sizes from transfers
         transfer_sizes = []
+        file_details = []
         
-        # Process SIZE responses
-        for entry in size_responses:
-            # Need to correlate with previous SIZE command to get filename
-            size = entry.get("bytes_transferred", 0)
+        # Process uploads
+        for upload in ftp_transfers.get("upload_files", []):
+            size = upload.get("bytes_transferred", 0)
             if size > 0:
                 transfer_sizes.append(size)
+                file_details.append({
+                    "filename": upload.get("filename", "unknown"),
+                    "type": "upload", 
+                    "size": size
+                })
         
-        # Process completion messages
-        for entry in completions:
-            size = entry.get("bytes_transferred", 0)
+        # Process downloads  
+        for download in ftp_transfers.get("download_files", []):
+            size = download.get("bytes_transferred", 0)
             if size > 0:
                 transfer_sizes.append(size)
+                file_details.append({
+                    "filename": download.get("filename", "unknown"),
+                    "type": "download",
+                    "size": size
+                })
         
         if not transfer_sizes:
             return {
-                "message": "No file size information found in FTP traffic",
-                "size_responses": len(size_responses),
-                "completion_messages": len(completions)
+                "message": "No file size information found in FTP data transfers",
+                "total_transfers": ftp_transfers.get("total_uploads", 0) + ftp_transfers.get("total_downloads", 0),
+                "data_packets": ftp_transfers.get("data_packets", 0)
             }
         
         # Calculate statistics
@@ -797,8 +847,9 @@ class PcapNetworkPlugin(BaseLogPlugin):
             "maximum_file_size": max_size,
             "size_categories": size_categories,
             "largest_files": sorted(transfer_sizes, reverse=True)[:5],
-            "size_responses_found": len(size_responses),
-            "completion_messages_found": len(completions)
+            "file_details": file_details,
+            "data_packets_analyzed": ftp_transfers.get("data_packets", 0),
+            "analysis_method": "Real data packet correlation (not control channel messages)"
         }
     
     def _query_ftp_sessions(self, entries: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:
