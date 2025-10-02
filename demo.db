@@ -1,0 +1,125 @@
+{
+  "files": [
+    {
+      "file_path": "sample.sky",
+      "plugin_name": "sky_log",
+      "parsed_at": "2025-10-01T21:53:05.832546",
+      "file_size": 179,
+      "line_count": 8,
+      "id": 1
+    }
+  ],
+  "entries": [
+    {
+      "line_number": 1,
+      "raw_line": "Entry 1: 192.168.1.100 -> 10.0.0.5 (1000 bytes)",
+      "timestamp": "2025-10-01T21:51:19",
+      "source_ip": "192.168.1.100",
+      "destination_ip": "10.0.0.5",
+      "bytes_transferred": 1000,
+      "event_type": "network_transfer",
+      "status": "completed",
+      "file_id": 1,
+      "id": 1
+    },
+    {
+      "line_number": 2,
+      "raw_line": "Entry 2: 192.168.1.101 -> 10.0.0.10 (2500 bytes)",
+      "timestamp": "2025-10-01T21:52:19",
+      "source_ip": "192.168.1.101",
+      "destination_ip": "10.0.0.10",
+      "bytes_transferred": 2500,
+      "event_type": "network_transfer",
+      "status": "completed",
+      "file_id": 1,
+      "id": 2
+    },
+    {
+      "line_number": 3,
+      "raw_line": "Entry 3: 10.0.0.15 -> 192.168.1.200 (800 bytes)",
+      "timestamp": "2025-10-01T21:53:19",
+      "source_ip": "10.0.0.15",
+      "destination_ip": "192.168.1.200",
+      "bytes_transferred": 800,
+      "event_type": "network_transfer",
+      "status": "completed",
+      "file_id": 1,
+      "id": 3
+    },
+    {
+      "line_number": 4,
+      "raw_line": "Entry 4: 172.16.0.50 -> 8.8.8.8 (1200 bytes)",
+      "timestamp": "2025-10-01T21:54:19",
+      "source_ip": "172.16.0.50",
+      "destination_ip": "8.8.8.8",
+      "bytes_transferred": 1200,
+      "event_type": "network_transfer",
+      "status": "completed",
+      "file_id": 1,
+      "id": 4
+    },
+    {
+      "line_number": 5,
+      "raw_line": "Entry 5: 192.168.1.100 -> 173.194.46.100 (3500 bytes)",
+      "timestamp": "2025-10-01T21:55:19",
+      "source_ip": "192.168.1.100",
+      "destination_ip": "173.194.46.100",
+      "bytes_transferred": 3500,
+      "event_type": "network_transfer",
+      "status": "completed",
+      "file_id": 1,
+      "id": 5
+    },
+    {
+      "line_number": 6,
+      "raw_line": "Entry 6: 10.0.0.25 -> 1.1.1.1 (900 bytes)",
+      "timestamp": "2025-10-01T21:56:19",
+      "source_ip": "10.0.0.25",
+      "destination_ip": "1.1.1.1",
+      "bytes_transferred": 900,
+      "event_type": "network_transfer",
+      "status": "completed",
+      "file_id": 1,
+      "id": 6
+    },
+    {
+      "line_number": 7,
+      "raw_line": "Entry 7: 192.168.1.150 -> 192.168.1.200 (4500 bytes)",
+      "timestamp": "2025-10-01T21:57:19",
+      "source_ip": "192.168.1.150",
+      "destination_ip": "192.168.1.200",
+      "bytes_transferred": 4500,
+      "event_type": "network_transfer",
+      "status": "completed",
+      "file_id": 1,
+      "id": 7
+    },
+    {
+      "line_number": 8,
+      "raw_line": "Entry 8: 172.16.0.75 -> 10.0.0.100 (650 bytes)",
+      "timestamp": "2025-10-01T21:58:19",
+      "source_ip": "172.16.0.75",
+      "destination_ip": "10.0.0.100",
+      "bytes_transferred": 650,
+      "event_type": "network_transfer",
+      "status": "completed",
+      "file_id": 1,
+      "id": 8
+    }
+  ],
+  "summaries": [
+    {
+      "total_transfers": 8,
+      "total_bytes": 15050,
+      "total_entries": 8,
+      "unique_source_ips": 7,
+      "unique_destination_ips": 7,
+      "creation_timestamp": "2025-10-01T21:51:19",
+      "hostname": "logsnoop-test",
+      "flag": "test-flag-123",
+      "version": 1,
+      "file_id": 1,
+      "id": 1
+    }
+  ]
+}
