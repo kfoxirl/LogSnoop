@@ -1,0 +1,10 @@
+# LogSnoop Dependencies
+# Core functionality - no external dependencies needed for basic log parsing
+
+# Optional: For better interactive mode experience
+pyreadline3>=3.5.4; sys_platform == "win32"  # Windows readline support for tab completion
+
+# Development dependencies (uncomment if needed)
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=4.0.0

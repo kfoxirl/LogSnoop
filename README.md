@@ -132,7 +132,17 @@ The interactive mode provides:
 - 📋 **Table browser** integration
 - 🔌 **Plugin information** with supported queries
 - ✅ **Input validation** and helpful error messages
+- ⭐ **Tab completion** for file paths (just like your shell!)
 - 🚀 **No command memorization needed!**
+
+#### 💡 Pro Tip: Tab Completion
+When entering file paths in interactive mode, press **TAB** to:
+- Auto-complete directory and file names
+- Browse available files and folders
+- Navigate through directory structures
+- Discover log files without typing full paths
+
+Works on all platforms (Linux/Mac/Windows) with automatic fallback.
 
 ### Command Line Interface (Advanced Users)
 

@@ -4,8 +4,23 @@ LogSnoop Interactive Mode - User-friendly guided interface
 
 import os
 import sys
+import glob
 from pathlib import Path
 from logsnoop.core import LogParser
+
+# Import readline for tab completion (Unix/Linux/Mac)
+try:
+    import readline
+    HAS_READLINE = True
+except ImportError:
+    # Windows fallback - try pyreadline
+    try:
+        import pyreadline3 as readline
+        HAS_READLINE = True
+    except ImportError:
+        # No readline available
+        HAS_READLINE = False
+        readline = None
 
 
 class LogSnoopInteractive:
@@ -14,6 +29,83 @@ class LogSnoopInteractive:
     def __init__(self, db_path='logsnoop.db'):
         self.log_parser = LogParser(db_path)
         self.db_path = db_path
+        self._setup_tab_completion()
+        
+    def _setup_tab_completion(self):
+        """Setup tab completion for file paths."""
+        if HAS_READLINE and readline:
+            try:
+                # Set up tab completion
+                readline.set_completer_delims(' \t\n`!@#$%^&*()=+[{]}\\|;:\'",<>?')
+                readline.parse_and_bind("tab: complete")
+            except AttributeError:
+                # Readline module doesn't support these functions
+                pass
+            
+    def _path_completer(self, text, state):
+        """Custom completer for file paths."""
+        # Expand user directory (~)
+        if text.startswith('~'):
+            text = os.path.expanduser(text)
+            
+        # Handle relative paths
+        if not text.startswith('/') and not (len(text) > 1 and text[1] == ':'):
+            # Convert to absolute path for completion
+            text = os.path.join(os.getcwd(), text)
+            
+        # Get directory and filename parts
+        dirname, basename = os.path.split(text)
+        
+        if not dirname:
+            dirname = '.'
+            
+        try:
+            # Get matching files and directories
+            if basename:
+                matches = glob.glob(os.path.join(dirname, basename + '*'))
+            else:
+                matches = glob.glob(os.path.join(dirname, '*'))
+                
+            # Filter to show directories and common log files
+            filtered_matches = []
+            for match in matches:
+                if os.path.isdir(match):
+                    # Add trailing slash for directories
+                    filtered_matches.append(match + os.sep)
+                else:
+                    # Show files with common log extensions or any file
+                    ext = os.path.splitext(match)[1].lower()
+                    if ext in ['.log', '.txt', '.out', '.err', ''] or not ext:
+                        filtered_matches.append(match)
+                        
+            # Return the match at the requested state
+            if state < len(filtered_matches):
+                return filtered_matches[state]
+            else:
+                return None
+                
+        except (OSError, IndexError):
+            return None
+    
+    def _input_with_completion(self, prompt, enable_completion=True):
+        """Input function with optional tab completion."""
+        if HAS_READLINE and readline and enable_completion:
+            try:
+                # Set our custom completer
+                old_completer = readline.get_completer()
+                readline.set_completer(self._path_completer)
+                
+                try:
+                    result = input(prompt)
+                    return result
+                finally:
+                    # Restore old completer
+                    readline.set_completer(old_completer)
+            except AttributeError:
+                # Readline functions not available, fall back to regular input
+                return input(prompt)
+        else:
+            return input(prompt)
         
     def clear_screen(self):
         """Clear terminal screen."""
@@ -88,15 +180,19 @@ class LogSnoopInteractive:
         print("\n\033[94m📁 File Selection\033[0m")
         print("\033[90m" + "─" * 30 + "\033[0m")
         
-        # Show some helpful examples
+        # Show some helpful examples and tab completion info
         print("\033[90mExamples:\033[0m")
         print("  \033[90m• C:\\logs\\access.log\033[0m")  
         print("  \033[90m• /var/log/auth.log\033[0m")
         print("  \033[90m• ./sample_logs/tomcat.log\033[0m")
+        
+        if HAS_READLINE:
+            print("\n\033[92m💡 Tip: Use TAB for path completion!\033[0m")
+        
         print()
         
         while True:
-            file_path = input("\033[93mEnter log file path (or 'b' for back): \033[0m").strip()
+            file_path = self._input_with_completion("\033[93mEnter log file path (or 'b' for back): \033[0m").strip()
             
             if file_path == 'b':
                 return None
