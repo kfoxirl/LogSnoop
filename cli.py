@@ -308,16 +308,23 @@ def main():
     parse_parser.add_argument('file', help='Path to log file')
     parse_parser.add_argument('plugin', help='Plugin name to use')
     parse_parser.add_argument('--db', default='logsnoop.db', help='Database file path')
+    parse_parser.add_argument('--debug', action='store_true', help='Enable debug logging for parsing')
+    parse_parser.add_argument('--debug-progress', type=int, help='Debug progress interval (packets)')
+    parse_parser.add_argument('--force', action='store_true', help='Force re-parse even if the same file hash exists')
     
     # Query command
     query_parser = subparsers.add_parser('query', help='Query parsed logs')
     query_parser.add_argument('plugin', help='Plugin name')
     query_parser.add_argument('query_type', help='Query type')
     query_parser.add_argument('--db', default='logsnoop.db', help='Database file path')
+    query_parser.add_argument('--debug', action='store_true', help='Enable debug logging for queries')
+    query_parser.add_argument('--debug-progress', type=int, help='Debug progress interval (packets)')
+    query_parser.add_argument('--http-ports', help='Comma-separated HTTP ports to consider (e.g., 80,8080,8000,8888)')
     query_parser.add_argument('--limit', type=int, help='Limit results')
     query_parser.add_argument('--ip', help='Filter by IP address')
     query_parser.add_argument('--user', help='Filter by username')
     query_parser.add_argument('--status', help='Filter by status')
+    query_parser.add_argument('--keyword', help='Optional keyword for certain queries (e.g., malicious_http_server_ip)')
     query_parser.add_argument('--by-ip', action='store_true', help='Group by IP')
     query_parser.add_argument('--by-user', action='store_true', help='Group by user')
     query_parser.add_argument('--by-path', action='store_true', help='Group by path')
@@ -371,6 +378,13 @@ def main():
                 print()
         
         elif args.command == 'parse':
+            # Set debug env if requested
+            if getattr(args, 'debug', False):
+                os.environ['LOGSNOOP_DEBUG'] = '1'
+            if getattr(args, 'debug_progress', None):
+                os.environ['LOGSNOOP_DEBUG_PROGRESS'] = str(args.debug_progress)
+            if getattr(args, 'force', False):
+                os.environ['LOGSNOOP_FORCE'] = '1'
             if not Path(args.file).exists():
                 print(f"Error: File '{args.file}' not found")
                 sys.exit(1)
@@ -390,6 +404,11 @@ def main():
                 print_summary(result['summary'])
         
         elif args.command == 'query':
+            # Set debug env if requested
+            if getattr(args, 'debug', False):
+                os.environ['LOGSNOOP_DEBUG'] = '1'
+            if getattr(args, 'debug_progress', None):
+                os.environ['LOGSNOOP_DEBUG_PROGRESS'] = str(args.debug_progress)
             if args.plugin not in log_parser.get_available_plugins():
                 print(f"Error: Plugin '{args.plugin}' not found")
                 sys.exit(1)
@@ -426,6 +445,13 @@ def main():
                 kwargs['by_bytes'] = True
             if args.sort_by:
                 kwargs['sort_by'] = args.sort_by
+            if hasattr(args, 'keyword') and args.keyword:
+                kwargs['keyword'] = args.keyword
+            if hasattr(args, 'http_ports') and args.http_ports:
+                try:
+                    kwargs['http_ports'] = [int(p.strip()) for p in args.http_ports.split(',') if p.strip()]
+                except ValueError:
+                    print("Warning: --http-ports has invalid value; ignoring")
             if hasattr(args, 'file_id') and args.file_id:
                 kwargs['file_id'] = args.file_id
             

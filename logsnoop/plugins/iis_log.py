@@ -28,7 +28,10 @@ class IISLogPlugin(BaseLogPlugin):
             'top_user_agents', 'bandwidth_usage', 'response_time_stats',
             'requests_by_method', 'requests_by_site', 'win32_status_analysis',
             'daily_traffic', 'client_errors', 'server_errors', 'asp_net_errors',
-            'top_referrers', 'query_string_analysis', 'protocol_analysis'
+            'top_referrers', 'query_string_analysis', 'protocol_analysis',
+            # Forensic analysis queries
+            'threat_actor_analysis', 'compromised_accounts', 'failed_logins',
+            'successful_transfers', 'account_access_ips'
         ]
     
     def __init__(self):
@@ -86,6 +89,7 @@ class IISLogPlugin(BaseLogPlugin):
         }
         
         fields = []
+        first_data_line = True
         
         for i, line in enumerate(lines):
             if not line.strip():
@@ -96,6 +100,17 @@ class IISLogPlugin(BaseLogPlugin):
                 if line.startswith('#Fields:'):
                     fields = line[9:].strip().split()
                 continue
+            
+            # Check if first non-comment line is a header (contains field names like 'date', 'time', 'c-ip', etc.)
+            if first_data_line and not fields:
+                # Check if line looks like IIS field header
+                parts = line.strip().split()
+                if len(parts) > 5 and 'date' in parts[0].lower() and 'time' in parts[1].lower():
+                    fields = parts
+                    first_data_line = False
+                    continue
+            
+            first_data_line = False
             
             try:
                 entry = self._parse_log_line(line, fields, i + 1)
@@ -204,22 +219,22 @@ class IISLogPlugin(BaseLogPlugin):
             entry['timestamp'] = datetime.now().isoformat()
         
         # Convert numeric fields
-        numeric_fields = {
-            'status_code': 'sc_status',
-            'substatus': 'substatus', 
-            'win32_status': 'win32_status',
-            'bytes_sent': 'bytes_sent',
-            'bytes_received': 'bytes_received',
-            'time_taken': 'time_taken',
-            'server_port': 'server_port'
-        }
+        numeric_fields = [
+            'status_code',
+            'substatus', 
+            'win32_status',
+            'bytes_sent',
+            'bytes_received',
+            'time_taken',
+            'server_port'
+        ]
         
-        for field_name, entry_key in numeric_fields.items():
-            if entry.get(entry_key):
+        for field_name in numeric_fields:
+            if field_name in entry and entry[field_name]:
                 try:
-                    entry[entry_key] = int(entry[entry_key])
+                    entry[field_name] = int(entry[field_name])
                 except (ValueError, TypeError):
-                    entry[entry_key] = 0
+                    entry[field_name] = 0
         
         # Build full URL
         uri_stem = entry.get('uri_stem', '')
@@ -333,6 +348,17 @@ class IISLogPlugin(BaseLogPlugin):
             return self._query_query_string_analysis(log_entries, **kwargs)
         elif query_type == 'protocol_analysis':
             return self._query_protocol_analysis(log_entries, **kwargs)
+        # Forensic analysis queries
+        elif query_type == 'threat_actor_analysis':
+            return self._query_threat_actor_analysis(log_entries, **kwargs)
+        elif query_type == 'compromised_accounts':
+            return self._query_compromised_accounts(log_entries, **kwargs)
+        elif query_type == 'failed_logins':
+            return self._query_failed_logins(log_entries, **kwargs)
+        elif query_type == 'successful_transfers':
+            return self._query_successful_transfers(log_entries, **kwargs)
+        elif query_type == 'account_access_ips':
+            return self._query_account_access_ips(log_entries, **kwargs)
         else:
             return []
     
@@ -693,3 +719,295 @@ class IISLogPlugin(BaseLogPlugin):
             })
         
         return result
+    
+    # ===== FORENSIC ANALYSIS QUERIES =====
+    
+    def _query_threat_actor_analysis(self, log_entries: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Identify potential threat actor IP addresses based on suspicious behavior:
+        - High number of failed login attempts (401 status)
+        - Successful logins followed by unusual activity
+        - High error rates
+        """
+        iis_entries = [e for e in log_entries if e.get('log_type') == 'iis_access']
+        ip_activity = {}
+        
+        for entry in iis_entries:
+            ip = entry.get('client_ip')
+            if not ip:
+                continue
+            
+            if ip not in ip_activity:
+                ip_activity[ip] = {
+                    'total_requests': 0,
+                    'failed_logins': 0,
+                    'successful_logins': 0,
+                    'errors': 0,
+                    'transfers': 0,
+                    'usernames': set(),
+                    'login_pages': 0,
+                    'transfer_pages': 0
+                }
+            
+            activity = ip_activity[ip]
+            activity['total_requests'] += 1
+            
+            status = entry.get('status_code')
+            uri = entry.get('uri_stem', '').lower()
+            method = entry.get('method', '')
+            username = entry.get('username')
+            
+            # Track login attempts
+            if 'login' in uri:
+                activity['login_pages'] += 1
+                if status == 401:
+                    activity['failed_logins'] += 1
+                elif status == 200 or status == 301:
+                    activity['successful_logins'] += 1
+                    if username:
+                        activity['usernames'].add(username)
+            
+            # Track transfers
+            if 'transfer' in uri:
+                activity['transfer_pages'] += 1
+                if method == 'POST' and (status == 200 or status == 301):
+                    activity['transfers'] += 1
+            
+            # Track errors
+            if status and status >= 400:
+                activity['errors'] += 1
+        
+        # Convert sets to lists for JSON serialization
+        result = []
+        for ip, activity in ip_activity.items():
+            activity['usernames'] = list(activity['usernames'])
+            activity['client_ip'] = ip
+            activity['error_rate'] = round(activity['errors'] / activity['total_requests'] * 100, 2) if activity['total_requests'] else 0
+            activity['threat_score'] = (
+                activity['failed_logins'] * 2 +  # Weight failed logins heavily
+                activity['successful_logins'] * 5 +  # Successful logins after failures are very suspicious
+                activity['transfers'] * 3 +  # Transfers are suspicious
+                activity['errors']  # General errors
+            )
+            result.append(activity)
+        
+        # Sort by threat score
+        result.sort(key=lambda x: x['threat_score'], reverse=True)
+        
+        limit = kwargs.get('limit', 20)
+        return result[:limit]
+    
+    def _query_compromised_accounts(self, log_entries: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Identify compromised user accounts based on:
+        - Accounts with failed login attempts followed by successful logins
+        - Accounts accessed from multiple IPs
+        - Accounts with unusual activity patterns
+        """
+        iis_entries = [e for e in log_entries if e.get('log_type') == 'iis_access']
+        user_activity = {}
+        
+        for entry in iis_entries:
+            username = entry.get('username')
+            if not username or username == '-':
+                continue
+            
+            if username not in user_activity:
+                user_activity[username] = {
+                    'failed_attempts': 0,
+                    'successful_logins': 0,
+                    'source_ips': set(),
+                    'first_seen': None,
+                    'last_seen': None,
+                    'total_requests': 0,
+                    'transfers': 0
+                }
+            
+            activity = user_activity[username]
+            activity['total_requests'] += 1
+            
+            ip = entry.get('client_ip')
+            if ip:
+                activity['source_ips'].add(ip)
+            
+            timestamp = entry.get('timestamp')
+            if timestamp:
+                if not activity['first_seen'] or timestamp < activity['first_seen']:
+                    activity['first_seen'] = timestamp
+                if not activity['last_seen'] or timestamp > activity['last_seen']:
+                    activity['last_seen'] = timestamp
+            
+            status = entry.get('status_code')
+            uri = entry.get('uri_stem', '').lower()
+            method = entry.get('method', '')
+            
+            if 'login' in uri:
+                if status == 401:
+                    activity['failed_attempts'] += 1
+                elif status == 200 or status == 301:
+                    activity['successful_logins'] += 1
+            
+            if 'transfer' in uri and method == 'POST':
+                activity['transfers'] += 1
+        
+        result = []
+        for username, activity in user_activity.items():
+            activity['username'] = username
+            activity['source_ip_count'] = len(activity['source_ips'])
+            activity['source_ips'] = list(activity['source_ips'])
+            activity['compromise_score'] = (
+                activity['failed_attempts'] +
+                activity['successful_logins'] * 2 +
+                (activity['source_ip_count'] - 1) * 3 +  # Multiple IPs is suspicious
+                activity['transfers'] * 2
+            )
+            result.append(activity)
+        
+        result.sort(key=lambda x: x['compromise_score'], reverse=True)
+        
+        limit = kwargs.get('limit', 20)
+        return result[:limit]
+    
+    def _query_failed_logins(self, log_entries: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Show failed login attempts (401 status on login pages).
+        Can filter by IP or username.
+        """
+        iis_entries = [e for e in log_entries if e.get('log_type') == 'iis_access']
+        
+        filter_ip = kwargs.get('ip')
+        filter_user = kwargs.get('user')
+        
+        failed_logins = []
+        for entry in iis_entries:
+            uri = entry.get('uri_stem', '').lower()
+            status = entry.get('status_code')
+            
+            # Check if this is a login attempt with 401 status
+            if 'login' in uri and status == 401:
+                if filter_ip and entry.get('client_ip') != filter_ip:
+                    continue
+                if filter_user and entry.get('username') != filter_user:
+                    continue
+                
+                failed_logins.append({
+                    'timestamp': entry.get('timestamp'),
+                    'client_ip': entry.get('client_ip'),
+                    'username': entry.get('username', 'N/A'),
+                    'uri': entry.get('uri_stem'),
+                    'user_agent': entry.get('user_agent'),
+                    'method': entry.get('method')
+                })
+        
+        # Sort by timestamp
+        failed_logins.sort(key=lambda x: x.get('timestamp', ''))
+        
+        limit = kwargs.get('limit')
+        return failed_logins[:limit] if limit else failed_logins
+    
+    def _query_successful_transfers(self, log_entries: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Show successful transfer operations (POST to transfer pages with 200/301 status).
+        Can filter by IP or username.
+        """
+        iis_entries = [e for e in log_entries if e.get('log_type') == 'iis_access']
+        
+        filter_ip = kwargs.get('ip')
+        filter_user = kwargs.get('user')
+        
+        transfers = []
+        for entry in iis_entries:
+            uri = entry.get('uri_stem', '').lower()
+            status = entry.get('status_code')
+            method = entry.get('method', '')
+            
+            # Check if this is a successful transfer
+            if 'transfer' in uri and method == 'POST' and status in [200, 301]:
+                if filter_ip and entry.get('client_ip') != filter_ip:
+                    continue
+                if filter_user and entry.get('username') != filter_user:
+                    continue
+                
+                transfers.append({
+                    'timestamp': entry.get('timestamp'),
+                    'client_ip': entry.get('client_ip'),
+                    'username': entry.get('username', 'N/A'),
+                    'uri': entry.get('uri_stem'),
+                    'query_string': entry.get('uri_query', ''),
+                    'status_code': status,
+                    'method': method,
+                    'user_agent': entry.get('user_agent')
+                })
+        
+        # Sort by timestamp
+        transfers.sort(key=lambda x: x.get('timestamp', ''))
+        
+        limit = kwargs.get('limit')
+        return transfers[:limit] if limit else transfers
+    
+    def _query_account_access_ips(self, log_entries: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Show all IP addresses that successfully accessed a specific user account.
+        Requires 'user' parameter.
+        """
+        iis_entries = [e for e in log_entries if e.get('log_type') == 'iis_access']
+        
+        filter_user = kwargs.get('user')
+        if not filter_user:
+            return [{'error': 'This query requires a --user parameter'}]
+        
+        ip_activity = {}
+        
+        for entry in iis_entries:
+            username = entry.get('username')
+            if username != filter_user:
+                continue
+            
+            ip = entry.get('client_ip')
+            if not ip:
+                continue
+            
+            if ip not in ip_activity:
+                ip_activity[ip] = {
+                    'first_seen': None,
+                    'last_seen': None,
+                    'total_requests': 0,
+                    'successful_logins': 0,
+                    'failed_attempts': 0,
+                    'transfers': 0
+                }
+            
+            activity = ip_activity[ip]
+            activity['total_requests'] += 1
+            
+            timestamp = entry.get('timestamp')
+            if timestamp:
+                if not activity['first_seen'] or timestamp < activity['first_seen']:
+                    activity['first_seen'] = timestamp
+                if not activity['last_seen'] or timestamp > activity['last_seen']:
+                    activity['last_seen'] = timestamp
+            
+            status = entry.get('status_code')
+            uri = entry.get('uri_stem', '').lower()
+            method = entry.get('method', '')
+            
+            if 'login' in uri:
+                if status == 401:
+                    activity['failed_attempts'] += 1
+                elif status == 200 or status == 301:
+                    activity['successful_logins'] += 1
+            
+            if 'transfer' in uri and method == 'POST':
+                activity['transfers'] += 1
+        
+        result = []
+        for ip, activity in ip_activity.items():
+            activity['client_ip'] = ip
+            activity['username'] = filter_user
+            result.append(activity)
+        
+        # Sort by successful logins and transfers
+        result.sort(key=lambda x: (x['successful_logins'], x['transfers']), reverse=True)
+        
+        limit = kwargs.get('limit')
+        return result[:limit] if limit else result

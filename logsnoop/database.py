@@ -59,6 +59,29 @@ class LogDatabase:
         entry['id'] = entry_id
         self.data['entries'].append(entry)
         self._save_database()
+
+    def store_log_entries_bulk(self, entries: List[Dict[str, Any]], file_id: int, progress_every: int = 5000):
+        """Store many parsed log entries efficiently with a single save.
+
+        Assigns incremental IDs, sets file_id per entry, appends to DB, and writes once at the end.
+        Prints periodic progress if LOGSNOOP_DEBUG is set.
+        """
+        import os, time
+        debug = os.environ.get('LOGSNOOP_DEBUG', '0') == '1'
+        start = time.time()
+        next_id = len(self.data['entries']) + 1
+        total = len(entries)
+        for i, e in enumerate(entries, start=1):
+            e['file_id'] = file_id
+            e['id'] = next_id
+            next_id += 1
+            self.data['entries'].append(e)
+            if debug and (i % max(1, progress_every) == 0):
+                elapsed = time.time() - start
+                print(f"[DEBUG] DB wrote {i}/{total} entries ({i/total*100:.1f}%) in {elapsed:.1f}s")
+        self._save_database()
+        if debug:
+            print(f"[DEBUG] DB bulk save complete for {total} entries in {time.time() - start:.2f}s")
     
     def store_summary(self, summary: Dict[str, Any]):
         """Store summary statistics for a file."""

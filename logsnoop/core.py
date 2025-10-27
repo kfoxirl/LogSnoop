@@ -72,7 +72,8 @@ class LogParser:
         
         # Calculate file hash to check for duplicates
         file_hash = self._calculate_file_hash(file_path)
-        existing_file = self.db.get_file_by_hash(file_hash)
+        force = os.environ.get('LOGSNOOP_FORCE', '0') == '1'
+        existing_file = self.db.get_file_by_hash(file_hash) if not force else None
         
         if existing_file:
             print(f"File already parsed (duplicate detected): {existing_file['file_path']}")
@@ -113,15 +114,32 @@ class LogParser:
         
         file_id = self.db.store_file_info(file_record)
         
-        # Store parsed entries
-        for entry in parsed_data.get('entries', []):
-            entry['file_id'] = file_id
-            self.db.store_log_entry(entry)
+        # Store parsed entries (bulk for performance)
+        entries = parsed_data.get('entries', [])
+        debug = os.environ.get('LOGSNOOP_DEBUG', '0') == '1'
+        progress_every_env = os.environ.get('LOGSNOOP_DEBUG_PROGRESS')
+        try:
+            progress_every = int(progress_every_env) if progress_every_env else 5000
+        except ValueError:
+            progress_every = 5000
+        if debug:
+            print(f"[DEBUG] Storing {len(entries)} parsed entries to database (bulk mode)...")
+        if hasattr(self.db, 'store_log_entries_bulk') and callable(getattr(self.db, 'store_log_entries_bulk')):
+            self.db.store_log_entries_bulk(entries, file_id, progress_every=progress_every)
+        else:
+            # Fallback to individual writes
+            for i, entry in enumerate(entries, start=1):
+                entry['file_id'] = file_id
+                self.db.store_log_entry(entry)
+                if debug and (i % max(1, progress_every) == 0):
+                    print(f"[DEBUG] Wrote {i}/{len(entries)} entries...")
         
         # Store summary statistics
         summary = parsed_data.get('summary', {})
         summary['file_id'] = file_id
         self.db.store_summary(summary)
+        if debug:
+            print(f"[DEBUG] Summary stored for file_id={file_id}")
         
         return {
             'file_id': file_id,
@@ -141,6 +159,10 @@ class LogParser:
         if file_id:
             # Query specific file
             log_entries = self.db.get_entries_by_file(file_id)
+            # Also provide file_path to plugins that need to re-open the capture/binary
+            file_info = self.db.get_file_info(file_id)
+            if file_info and 'file_path' in file_info:
+                kwargs.setdefault('file_path', file_info['file_path'])
         else:
             # Query all files for this plugin
             log_entries = self.db.get_entries_by_plugin(plugin_name)

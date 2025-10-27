@@ -6,11 +6,13 @@ LogSnoop is a flexible log parser that can analyze different types of logs throu
 
 - **Plugin Architecture**: Easily extensible with custom log parsers
 - **Multiple Log Types**: Built-in support for SSH, FTP, HTTP, login, Tomcat, and IIS logs
+- **Process Trees**: New `process_tree` plugin parses JSON process event trees (PID/PPID/image/cmdline/hash) with handy queries
 - **Flat File Database**: Simple JSON-based storage with no external dependencies
 - **Rich Querying**: Comprehensive query system for each log type
 - **Interactive Table View**: Paginated table display with `less`-like navigation
 - **CLI Interface**: Command-line tool for parsing and querying logs
 - **Statistics**: Automatic generation of summary statistics
+- **Vehicle Telemetry Insights**: Decode CAN bus frames from SocketCAN PCAP captures with speed analytics and identifier statistics
 - **Filtering & Search**: Filter log entries by IP addresses and other criteria
 
 ## Supported Log Types
@@ -52,6 +54,11 @@ LogSnoop is a flexible log parser that can analyze different types of logs throu
 - **Queries**: `requests_by_status`, `requests_by_ip`, `requests_by_path`, `error_requests`, `slow_requests`, `bytes_served`, `top_pages`, `top_user_agents`, `bandwidth_usage`, `response_time_stats`, `requests_by_method`, `session_analysis`, `exception_summary`, `daily_traffic`, `catalina_errors`, `application_errors`
 
 ### 7. Microsoft IIS Logs (`iis_log`)
+### 8. Process Tree Logs (`process_tree`)
+- Parses JSON arrays of process events with fields like timestamp, process_name, process_id (PID), parent_process_id (PPID), image path, command line, and md5
+- Tracks parent-child relationships and provides quick views and hunting helpers
+- Queries: `process_list`, `count_by_name`, `children_of`, `tree_from_pid`, `top_parents`, `commandline_search`, `suspicious_spawns`
+
 - Parses Microsoft IIS server logs (W3C Extended format)
 - Tracks HTTP requests, response codes, bandwidth, and response times
 - Supports IIS-specific features like Win32 status codes and ASP.NET errors
@@ -164,6 +171,9 @@ logsnoop parse /var/log/apache2/access.log http_access
 
 # Parse SKY binary log
 logsnoop parse network_traffic.sky sky_log
+
+# Parse a Process Tree JSON
+logsnoop parse processtree.json process_tree
 
 # Parse Tomcat access log
 logsnoop parse /opt/tomcat/logs/localhost_access_log.txt tomcat_log
